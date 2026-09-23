@@ -186,6 +186,8 @@
   #ah-prev path { fill: var(--prev); }
   #ah-sel path { fill: var(--sel); }
 
+  .lhandle { fill: var(--panel); stroke: var(--sel); stroke-width: 2.5; cursor: grab; }
+  .lhandle:hover { stroke-width: 4; }
   .temp { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 6 4; fill: none; pointer-events: none; }
   .box { fill: rgba(79, 107, 237, .08); stroke: var(--accent); stroke-dasharray: 4 3; pointer-events: none; }
 
@@ -373,6 +375,7 @@
     <tr><td>Drag the <b>●</b> handle</td><td>Create a link. Drop on empty space to create a new linked node</td></tr>
     <tr><td><kbd>C</kbd> Link mode</td><td>Drag node → node, or click source then target. From an array cell, links start at that cell</td></tr>
     <tr><td>Double-click a link</td><td>Toggle next / prev style</td></tr>
+    <tr><td>Drag an arrow's end</td><td>Re-point it to another node, e.g. <code>node.prev = x</code>. Grab near the arrowhead, or click the arrow and drag one of its round handles. The start end works too</td></tr>
     <tr><td>Drag empty space</td><td>Pan · <kbd>Shift</kbd>+drag to box-select · wheel to zoom</td></tr>
     <tr><td>Moving a Set</td><td>Also moves the nodes inside it. Resize from the bottom-right corner</td></tr>
     <tr><td><kbd>V</kbd> <kbd>C</kbd></td><td>Move tool / Link tool</td></tr>
@@ -497,7 +500,10 @@
     if (l.from === l.to && l.fromCell === l.toCell) {
       const top = a.kind === 'circle' ? a.cy - a.r : a.y;
       const x = a.cx;
-      return `M ${x - 10} ${top + 2} C ${x - 45} ${top - 60}, ${x + 45} ${top - 60}, ${x + 10} ${top + 2}`;
+      return {
+        d: `M ${x - 10} ${top + 2} C ${x - 45} ${top - 60}, ${x + 45} ${top - 60}, ${x + 10} ${top + 2}`,
+        a: { x: x - 10, y: top + 2 }, b: { x: x + 10, y: top + 2 }
+      };
     }
     const hasReverse = state.links.some(o => o !== l && o.from === l.to && o.to === l.from &&
       (o.fromCell ?? null) === (l.toCell ?? null) && (o.toCell ?? null) === (l.fromCell ?? null));
@@ -506,9 +512,9 @@
     const mx = (a.cx + b.cx) / 2 + (-dy / d) * off, my = (a.cy + b.cy) / 2 + (dx / d) * off;
     const p1 = boundary(a, off ? mx : b.cx, off ? my : b.cy);
     const p2 = boundary(b, off ? mx : a.cx, off ? my : a.cy);
-    if (!off) return `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+    if (!off) return { d: `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`, a: p1, b: p2 };
     const qx = 2 * mx - (p1.x + p2.x) / 2, qy = 2 * my - (p1.y + p2.y) / 2;
-    return `M ${p1.x} ${p1.y} Q ${qx} ${qy} ${p2.x} ${p2.y}`;
+    return { d: `M ${p1.x} ${p1.y} Q ${qx} ${qy} ${p2.x} ${p2.y}`, a: p1, b: p2 };
   }
 
   // ---------- coordinates ----------
@@ -913,9 +919,21 @@
     return `<g class="${cls.join(' ')}" data-id="${n.id}">${h}</g>`;
   }
 
+  // handles on both ends of a selected link: drag one onto another node to re-point that end
+  function drawLinkHandles(l) {
+    const lp = linkPath(l);
+    if (!lp) return '';
+    return ['from', 'to'].map(w => {
+      const pt = w === 'to' ? lp.b : lp.a;
+      return `<circle class="lhandle" data-link="${l.id}" data-lh="${w}" cx="${pt.x}" cy="${pt.y}" r="7"/>`;
+    }).join('');
+  }
+
   function drawLink(l) {
-    const d = linkPath(l);
-    if (!d) return '';
+    if (drag && drag.mode === 'relink' && drag.moved && drag.linkId === l.id) return '';
+    const lp = linkPath(l);
+    if (!lp) return '';
+    const d = lp.d;
     const isSel = selLinks.has(l.id);
     const marker = isSel ? 'ah-sel' : (l.style === 'prev' ? 'ah-prev' : 'ah-next');
     return `<g class="link ${l.style}${isSel ? ' sel' : ''}" data-link="${l.id}">` +
@@ -934,6 +952,9 @@
     for (const n of state.nodes) if (n.type === 'set') h += drawNode(n);
     for (const l of state.links) h += drawLink(l);
     for (const n of state.nodes) if (n.type !== 'set') h += drawNode(n);
+    if (!drag || drag.mode !== 'relink' || !drag.moved) {
+      for (const l of state.links) if (selLinks.has(l.id)) h += drawLinkHandles(l);
+    }
     content.innerHTML = h;
 
     $('#undo').disabled = hIdx <= 0;
@@ -1108,13 +1129,26 @@
     // links
     if (linkEl) {
       const id = +linkEl.dataset.link;
-      if (isDoubleTap(e, 'l' + id)) {
-        const l = linkById(id);
+      const l = linkById(id);
+      if (!linkEl.dataset.lh && isDoubleTap(e, 'l' + id)) {
         if (l) { l.style = l.style === 'next' ? 'prev' : 'next'; commit(); }
         return;
       }
-      if (!e.shiftKey) { sel.clear(); selLinks.clear(); selCell = null; }
+      // grabbing a handle, or the last / first bit of the arrow, re-points that end
+      let which = linkEl.dataset.lh || null;
+      const lp = l && linkPath(l);
+      if (!which && lp && !e.shiftKey) {
+        const grab = 22 / Math.sqrt(view.k);
+        if (Math.hypot(p.x - lp.b.x, p.y - lp.b.y) < grab) which = 'to';
+        else if (Math.hypot(p.x - lp.a.x, p.y - lp.a.y) < grab) which = 'from';
+      }
+      if (!e.shiftKey || which) { sel.clear(); selLinks.clear(); selCell = null; }
       if (selLinks.has(id) && e.shiftKey) selLinks.delete(id); else selLinks.add(id);
+      if (which && lp) {
+        drag = { mode: 'relink', linkId: id, which, fixed: which === 'to' ? lp.a : lp.b,
+                 cx: e.clientX, cy: e.clientY, moved: false, hover: null };
+        return render();
+      }
       render();
       return;
     }
@@ -1211,6 +1245,22 @@
         drag.ex = p.x; drag.ey = p.y;
         break;
       }
+      case 'relink': {
+        // until it actually moves, a press is just a click that selects the link
+        if (!drag.moved && Math.hypot(e.clientX - drag.cx, e.clientY - drag.cy) < 5) return;
+        const first = !drag.moved;
+        drag.moved = true;
+        const hit = hitAt(e.clientX, e.clientY);
+        const hover = hit ? hit.id : null;
+        if (hover !== drag.hover || first) { drag.hover = hover; render(); }
+        const l = linkById(drag.linkId);
+        const marker = l && l.style === 'prev' ? 'ah-prev' : 'ah-next';
+        const [x1, y1, x2, y2] = drag.which === 'to'
+          ? [drag.fixed.x, drag.fixed.y, p.x, p.y]
+          : [p.x, p.y, drag.fixed.x, drag.fixed.y];
+        overlay.innerHTML = `<line class="temp" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" marker-end="url(#${marker})"/>`;
+        break;
+      }
       case 'link': {
         const src = endShape(drag.from, drag.fromCell);
         const hit = hitAt(e.clientX, e.clientY);
@@ -1254,6 +1304,27 @@
             if (s.cx >= x1 && s.cx <= x2 && s.cy >= y1 && s.cy <= y2) sel.add(n.id);
           }
           for (const l of state.links) if (sel.has(l.from) && sel.has(l.to)) selLinks.add(l.id);
+        }
+        render();
+        break;
+      }
+      case 'relink': {
+        const l = linkById(d.linkId);
+        if (l && d.moved && e.type !== 'pointercancel') {
+          const hit = hitAt(e.clientX, e.clientY);
+          if (hit) {
+            const n = byId(hit.id);
+            const cell = n && n.type === 'array' ? hit.cell : null;
+            if (d.which === 'to') { l.to = hit.id; l.toCell = cell; }
+            else {
+              l.from = hit.id; l.fromCell = cell;
+              // a pointer can only point at one thing
+              if (n && n.type === 'pointer') state.links = state.links.filter(o => o === l || o.from !== n.id);
+            }
+            commit();
+            break;
+          }
+          toast('Drop the arrow end on a node to re-point it');
         }
         render();
         break;
