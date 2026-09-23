@@ -65,27 +65,55 @@
   body {
     background: var(--bg); color: var(--text);
     font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: flex; flex-direction: column; overflow: hidden;
+    display: flex; flex-direction: row; overflow: hidden;
   }
   button, input, select, textarea { font: inherit; color: inherit; }
 
-  /* ---------- toolbar ---------- */
+  /* ---------- sidebar ---------- */
   .toolbar {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
-    padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); z-index: 5;
+    display: flex; flex-direction: column; gap: 4px; flex: none; width: 150px;
+    padding: 10px 8px; background: var(--panel); border-right: 1px solid var(--border); z-index: 5;
+    overflow-y: auto; overflow-x: hidden; scrollbar-width: none;
   }
-  .brand { font-weight: 700; display: flex; align-items: center; gap: 6px; margin-right: 4px; }
-  .brand svg { width: 22px; height: 22px; }
-  .tg { display: flex; gap: 2px; background: var(--panel-2); border-radius: 8px; padding: 2px; }
+  .toolbar::-webkit-scrollbar { display: none; }
+  .brand { font-weight: 700; display: flex; align-items: center; gap: 6px; padding: 2px 4px 6px; }
+  .brand svg { width: 22px; height: 22px; flex: none; }
+  .collapse {
+    margin-left: auto; border: 0; background: transparent; cursor: pointer; border-radius: 6px;
+    width: 26px; height: 26px; color: var(--muted);
+  }
+  .collapse:hover { background: var(--border); }
+  .collapse.help { margin-left: auto; font-weight: 700; }
+  .collapse.help + .collapse { margin-left: 0; }
+  .tg.row { flex-direction: row; margin-top: 6px; }
+  .tg.row button { justify-content: center; padding: 3px 4px; gap: 4px; }
+  body.collapsed .tg.row { flex-direction: column; }
+  .sec {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin: 6px 6px 1px;
+  }
+  .tg { display: flex; flex-direction: column; gap: 2px; background: var(--panel-2); border-radius: 8px; padding: 2px; }
+  .tg button {
+    display: flex; align-items: center; gap: 8px; text-align: left; width: 100%;
+  }
   .tg button, .btn {
     border: 0; background: transparent; padding: 5px 9px; border-radius: 6px; cursor: pointer;
     white-space: nowrap; min-height: 30px;
   }
+  .tg button { min-height: 27px; padding: 3px 9px; }
   .tg button:hover, .btn:hover { background: var(--border); }
   .tg button.on { background: var(--accent); color: var(--accent-text); }
   .tg button:disabled { opacity: .35; cursor: default; background: transparent; }
-  .spacer { flex: 1; }
-  .glyph { display: inline-block; min-width: 1em; text-align: center; }
+  .spacer { flex: 1; min-height: 8px; }
+  .glyph { display: inline-block; min-width: 1.2em; text-align: center; }
+
+  /* collapsed = icons only */
+  body.collapsed .toolbar { width: 52px; padding: 10px 6px; }
+  body.collapsed .toolbar .lbl { display: none; }
+  body.collapsed .brand { flex-direction: column; padding: 2px 0 6px; }
+  body.collapsed .collapse { margin: 0; transform: rotate(180deg); }
+  body.collapsed .tg { margin-top: 6px; }
+  body.collapsed .tg button { justify-content: center; padding: 3px 0; }
 
   /* ---------- stage ---------- */
   #stage {
@@ -134,8 +162,19 @@
   .text.sel .body { stroke: var(--sel); stroke-width: 1.5; stroke-dasharray: 4 3; }
   .note { fill: var(--text); font: 500 14px ui-monospace, Menlo, Consolas, monospace; text-anchor: middle; pointer-events: none; }
 
-  .port { fill: var(--accent); stroke: var(--panel); stroke-width: 2; opacity: 0; cursor: crosshair; transition: opacity .12s; }
+  .port { fill: var(--accent); stroke: var(--panel); stroke-width: 2; opacity: 0; pointer-events: none; transition: opacity .12s; }
+  .port-hit { fill: transparent; cursor: crosshair; }
   .obj:hover .port, .obj.sel .port { opacity: 1; }
+  .hitpad { fill: transparent; }
+  .pointer .val { font-size: 14px; }
+
+  #ptrMenu { padding: 4px; display: flex; flex-direction: column; min-width: 190px; z-index: 12; }
+  #ptrMenu[hidden] { display: none; }
+  #ptrMenu .btn { text-align: left; display: flex; justify-content: space-between; gap: 14px; }
+  #ptrMenu .btn:disabled { opacity: .4; cursor: default; background: transparent; }
+  #ptrMenu code { font: 600 13px ui-monospace, Menlo, Consolas, monospace; }
+  #ptrMenu .k { color: var(--muted); font-size: 12px; }
+  #ptrMenu hr { border: 0; border-top: 1px solid var(--border); margin: 3px 2px; }
 
   .link { cursor: pointer; }
   .link .hit { stroke: transparent; stroke-width: 16; fill: none; }
@@ -217,8 +256,6 @@
   }
 
   @media (max-width: 720px) {
-    .toolbar { padding: 6px 8px; gap: 6px; }
-    .lbl { display: none; }
     #panel { left: 16px; right: 16px; width: auto; top: 10px; }
     #hint { display: none; }
     #selbar { bottom: 62px; }
@@ -227,55 +264,58 @@
 </head>
 <body>
 
-<header class="toolbar">
+<aside class="toolbar" id="sidebar">
   <div class="brand">
     <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="8" cy="16" r="6" fill="var(--accent)"/><circle cx="24" cy="16" r="6" fill="var(--accent)"/><path d="M14 16h4" stroke="var(--accent)" stroke-width="2.5"/></svg>
-    Jsolver
+    <span class="lbl">Jsolver</span>
+    <button id="helpBtn" class="collapse help" title="Shortcuts (?)">?</button>
+    <button id="collapseBtn" class="collapse" title="Collapse / expand menu">«</button>
   </div>
 
+  <div class="sec lbl">Tool</div>
   <div class="tg" role="group" aria-label="Tool">
-    <button data-tool="select" class="on" title="Select & move (V)"><span class="glyph">↖</span><span class="lbl"> Move</span></button>
-    <button data-tool="connect" title="Link mode: drag or click node → node (C)"><span class="glyph">⤳</span><span class="lbl"> Link</span></button>
+    <button data-tool="select" class="on" title="Select & move (V)"><span class="glyph">↖</span><span class="lbl">Move</span></button>
+    <button data-tool="connect" title="Link mode: drag or click node → node (C)"><span class="glyph">⤳</span><span class="lbl">Link</span></button>
   </div>
 
+  <div class="sec lbl">Add</div>
   <div class="tg" role="group" aria-label="Add">
-    <button data-add="circle" title="Add node (N)"><span class="glyph">●</span><span class="lbl"> Node</span></button>
-    <button data-add="array" title="Add array (A)"><span class="glyph">▭</span><span class="lbl"> Array</span></button>
-    <button data-add="set" title="Add set container (S)"><span class="glyph">◯</span><span class="lbl"> Set</span></button>
-    <button data-add="pointer" title="Add pointer label like head / curr / i (P)"><span class="glyph">↦</span><span class="lbl"> Pointer</span></button>
-    <button data-add="null" title="Add null (U)"><span class="glyph">∅</span><span class="lbl"> Null</span></button>
-    <button data-add="text" title="Add note (T)"><span class="glyph">T</span><span class="lbl"> Note</span></button>
+    <button data-add="circle" title="Add node (N)"><span class="glyph">●</span><span class="lbl">Node</span></button>
+    <button data-add="array" title="Add array (A)"><span class="glyph">▭</span><span class="lbl">Array</span></button>
+    <button data-add="set" title="Add set container (S)"><span class="glyph">◯</span><span class="lbl">Set</span></button>
+    <button data-add="pointer" title="Add pointer label like head / curr / i (P)"><span class="glyph">↦</span><span class="lbl">Pointer</span></button>
+    <button data-add="null" title="Add null (U)"><span class="glyph">∅</span><span class="lbl">Null</span></button>
+    <button data-add="text" title="Add note (T)"><span class="glyph">T</span><span class="lbl">Note</span></button>
   </div>
 
+  <div class="sec lbl">New links</div>
   <div class="tg" role="group" aria-label="Link style">
-    <button data-style="next" class="on" title="New links: single arrow (next)">→</button>
-    <button data-style="prev" title="New links: prev arrow (dashed)">⇠</button>
-    <button data-style="both" title="New links: both directions (doubly linked)">⇄</button>
+    <button data-style="next" class="on" title="New links: single arrow (next)"><span class="glyph">→</span><span class="lbl">Next</span></button>
+    <button data-style="prev" title="New links: prev arrow (dashed)"><span class="glyph">⇠</span><span class="lbl">Prev</span></button>
+    <button data-style="both" title="New links: both directions (doubly linked)"><span class="glyph">⇄</span><span class="lbl">Both</span></button>
   </div>
 
-  <div class="tg">
-    <button id="undo" title="Undo (Ctrl+Z)">↶</button>
-    <button id="redo" title="Redo (Ctrl+Y)">↷</button>
+  <div class="tg row">
+    <button id="undo" title="Undo (Ctrl+Z)"><span class="glyph">↶</span><span class="lbl">Undo</span></button>
+    <button id="redo" title="Redo (Ctrl+Y)"><span class="glyph">↷</span><span class="lbl">Redo</span></button>
   </div>
 
+  <div class="sec lbl">View</div>
   <div class="tg">
-    <button id="fit" title="Fit everything in view (F)">Fit</button>
-    <button id="snap" title="Snap to grid (G)">Snap</button>
+    <button id="fit" title="Fit everything in view (F)"><span class="glyph">⤢</span><span class="lbl">Fit</span></button>
+    <button id="snap" title="Snap to grid (G)"><span class="glyph">#</span><span class="lbl">Snap</span></button>
+    <button id="panelBtn" class="on" title="Quick build panel (B)"><span class="glyph">▦</span><span class="lbl">Build</span></button>
+    <button id="theme" title="Toggle theme"><span class="glyph">◐</span><span class="lbl">Theme</span></button>
   </div>
 
+  <div class="sec lbl">Board</div>
   <div class="tg">
-    <button id="export" title="Download board as JSON">Export</button>
-    <button id="import" title="Load board from JSON">Import</button>
-    <button id="clear" title="Clear board">Clear</button>
+    <button id="export" title="Download board as JSON"><span class="glyph">↓</span><span class="lbl">Export</span></button>
+    <button id="import" title="Load board from JSON"><span class="glyph">↑</span><span class="lbl">Import</span></button>
+    <button id="clear" title="Clear board"><span class="glyph">✕</span><span class="lbl">Clear</span></button>
   </div>
 
-  <div class="spacer"></div>
-  <div class="tg">
-    <button id="panelBtn" class="on" title="Quick build panel (B)">Build</button>
-    <button id="theme" title="Toggle theme">◐</button>
-    <button id="helpBtn" title="Shortcuts (?)">?</button>
-  </div>
-</header>
+</aside>
 
 <main id="stage">
   <svg id="svg" xmlns="http://www.w3.org/2000/svg">
@@ -311,6 +351,7 @@
   </section>
 
   <div id="selbar" class="float" hidden></div>
+  <div id="ptrMenu" class="float" hidden></div>
 
   <div id="zoom" class="float">
     <button class="btn" id="zoomOut" title="Zoom out (-)">−</button>
@@ -337,6 +378,9 @@
     <tr><td><kbd>V</kbd> <kbd>C</kbd></td><td>Move tool / Link tool</td></tr>
     <tr><td><kbd>N</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>P</kbd> <kbd>U</kbd> <kbd>T</kbd></td><td>Add node, array, set, pointer, null, note (at the cursor)</td></tr>
     <tr><td><kbd>1</kbd>–<kbd>7</kbd></td><td>Color: default, green, yellow, red, blue, purple, gray</td></tr>
+    <tr><td>Click a pointer</td><td>Menu: <code>curr = curr.next</code>, <code>curr = curr.prev</code>, point to…, <code>= null</code>, rename</td></tr>
+    <tr><td>Drag a pointer onto a node</td><td>It snaps there and now points to that node / array cell</td></tr>
+    <tr><td>Pointer selected + <kbd>→</kbd> / <kbd>←</kbd></td><td>Move it to next / prev (arrays: <code>i++</code> / <code>i--</code>). <kbd>Shift</kbd>+arrows nudges instead</td></tr>
     <tr><td><kbd>R</kbd></td><td>Reverse selected links (great for list reversal)</td></tr>
     <tr><td><kbd>]</kbd> / <kbd>[</kbd></td><td>Array: insert cell after selected / remove selected cell</td></tr>
     <tr><td><kbd>Enter</kbd> / <kbd>F2</kbd></td><td>Edit selected</td></tr>
@@ -404,7 +448,10 @@
       }
       case 'array': return rect(n.x, n.y, Math.max(1, n.cells.length) * cellW(n), CELL_H);
       case 'set': return rect(n.x, n.y, n.w, n.h);
-      case 'pointer':
+      case 'pointer': {
+        const w = Math.max(54, textW(n.value, 14) + 28);
+        return rect(n.x - w / 2, n.y - 16, w, 32);
+      }
       case 'null': {
         const w = Math.max(44, textW(n.value, 13) + 22);
         return rect(n.x - w / 2, n.y - 13, w, 26);
@@ -508,6 +555,14 @@
   }
 
   function addLink(from, fromCell, to, toCell) {
+    const src = byId(from);
+    if (src && src.type === 'pointer') {
+      // a pointer points at exactly one thing
+      if (to === from) return;
+      state.links = state.links.filter(l => l.from !== from);
+      addLinkRaw(from, null, to, toCell, 'next');
+      return;
+    }
     if (linkStyle === 'both') {
       addLinkRaw(from, fromCell, to, toCell, 'next');
       addLinkRaw(to, toCell, from, fromCell, 'prev');
@@ -558,6 +613,145 @@
     });
     commit();
   }
+
+  // ---------- pointers ----------
+  const pointerLink = ptr => state.links.find(l => l.from === ptr.id);
+
+  // node / array cell under a world point (ignores pointers, notes and sets)
+  function targetAt(p, excludeId) {
+    for (let i = state.nodes.length - 1; i >= 0; i--) {
+      const n = state.nodes[i];
+      if (n.id === excludeId || n.type === 'set' || n.type === 'text' || n.type === 'pointer') continue;
+      const s = shape(n);
+      if (s.kind === 'circle') {
+        if (Math.hypot(p.x - s.cx, p.y - s.cy) <= s.r + 8) return { id: n.id, cell: null };
+      } else if (p.x >= s.x - 6 && p.x <= s.x + s.w + 6 && p.y >= s.y - 6 && p.y <= s.y + s.h + 6) {
+        const cell = n.type === 'array' && n.cells.length ? clamp(Math.floor((p.x - s.x) / cellW(n)), 0, n.cells.length - 1) : null;
+        return { id: n.id, cell };
+      }
+    }
+    return null;
+  }
+
+  // where following next (dir = 1) or prev (dir = -1) from the pointer's target leads
+  function pointerStep(ptr, dir) {
+    const cur = pointerLink(ptr);
+    if (!cur) return null;
+    const tn = byId(cur.to);
+    if (!tn) return null;
+    if (tn.type === 'array' && cur.toCell != null) {
+      const c = cur.toCell + dir;
+      return c >= 0 && c < tn.cells.length ? { id: tn.id, cell: c } : null;
+    }
+    const notPtr = id => { const n = byId(id); return n && n.type !== 'pointer'; };
+    const want = dir > 0 ? 'next' : 'prev';
+    const l = state.links.find(l => l.from === tn.id && l.style === want && notPtr(l.to));
+    if (l) return { id: l.to, cell: l.toCell };
+    if (dir < 0) {
+      // singly linked: walk the next link backwards
+      const back = state.links.find(l => l.to === tn.id && l.style === 'next' && notPtr(l.from));
+      if (back) return { id: back.from, cell: back.fromCell };
+    }
+    return null;
+  }
+
+  function placePointer(ptr, t) {
+    const n = byId(t.id), s = endShape(t.id, t.cell);
+    if (!n || !s) return;
+    // below arrays, above everything else; stack further out if another pointer is in the way
+    const below = n.type === 'array';
+    const base = below ? s.y + s.h + 60 : (s.kind === 'circle' ? s.cy - s.r : s.y) - 55;
+    const me = shape({ ...ptr, x: s.cx, y: base });
+    const others = state.nodes.filter(o => o.type === 'pointer' && o !== ptr);
+    for (let k = 0; k < 12; k++) {
+      const y = base + (below ? 1 : -1) * k * 40;
+      const blocked = others.some(o => {
+        const os = shape(o);
+        return Math.abs(os.cx - s.cx) < (os.w + me.w) / 2 + 4 && Math.abs(os.cy - y) < 32;
+      });
+      if (!blocked || k === 11) { ptr.x = s.cx; ptr.y = y; return; }
+    }
+  }
+
+  function pointTo(ptr, t) {
+    state.links = state.links.filter(l => l.from !== ptr.id);
+    placePointer(ptr, t);
+    addLinkRaw(ptr.id, null, t.id, t.cell ?? null, 'next');
+  }
+
+  function stepPointers(dir) {
+    const ptrs = [...sel].map(byId).filter(n => n && n.type === 'pointer');
+    if (!ptrs.length) return false;
+    let moved = 0;
+    for (const p of ptrs) {
+      const t = pointerStep(p, dir);
+      if (t) { pointTo(p, t); moved++; }
+    }
+    if (moved) commit(); else toast(dir > 0 ? 'No next node' : 'No previous node');
+    return true;
+  }
+
+  // ---------- pointer menu ----------
+  const ptrMenu = $('#ptrMenu');
+  let menuFor = null;
+
+  function openPtrMenu(id) {
+    menuFor = id;
+    renderPtrMenu();
+  }
+  function closePtrMenu() { menuFor = null; ptrMenu.hidden = true; }
+
+  function renderPtrMenu() {
+    const p = menuFor != null ? byId(menuFor) : null;
+    if (!p || !sel.has(p.id) || drag || editing) { ptrMenu.hidden = true; if (!p || !sel.has(menuFor)) menuFor = null; return; }
+    const name = esc(p.value);
+    const cur = pointerLink(p);
+    const onArray = cur && byId(cur.to)?.type === 'array' && cur.toCell != null;
+    const canNext = !!pointerStep(p, 1), canPrev = !!pointerStep(p, -1);
+    const nextLbl = onArray ? `${name}++` : `${name} = ${name}.next`;
+    const prevLbl = onArray ? `${name}--` : `${name} = ${name}.prev`;
+    const h =
+      `<button class="btn" data-pm="next" ${canNext ? '' : 'disabled'}><code>${nextLbl}</code><span class="k">→</span></button>` +
+      `<button class="btn" data-pm="prev" ${canPrev ? '' : 'disabled'}><code>${prevLbl}</code><span class="k">←</span></button>` +
+      `<button class="btn" data-pm="pick"><span>Point to…</span><span class="k">click a node</span></button>` +
+      (cur ? `<button class="btn" data-pm="unlink"><code>${name} = null</code><span class="k"></span></button>` : '') +
+      `<hr><button class="btn" data-pm="rename"><span>Rename</span><span class="k">Enter</span></button>` +
+      `<button class="btn" data-pm="delete"><span>Delete</span><span class="k">Del</span></button>`;
+    if (ptrMenu.innerHTML !== h) ptrMenu.innerHTML = h;
+    ptrMenu.hidden = false;
+    const s = shape(p);
+    const c = toScreen(s.cx, s.y + s.h);
+    const sr = stage.getBoundingClientRect();
+    const mw = ptrMenu.offsetWidth, mh = ptrMenu.offsetHeight;
+    let left = clamp(c.x - mw / 2, 8, sr.width - mw - 8);
+    let top = c.y + 12;
+    if (top + mh > sr.height - 8) top = toScreen(s.cx, s.y).y - mh - 12;
+    ptrMenu.style.left = left + 'px';
+    ptrMenu.style.top = Math.max(8, top) + 'px';
+  }
+
+  ptrMenu.addEventListener('pointerdown', e => e.stopPropagation());
+  ptrMenu.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (!b || b.disabled) return;
+    const p = byId(menuFor);
+    if (!p) return closePtrMenu();
+    switch (b.dataset.pm) {
+      case 'next': stepPointers(1); break;
+      case 'prev': stepPointers(-1); break;
+      case 'pick':
+        closePtrMenu();
+        pending = { from: p.id, fromCell: null, pick: true };
+        render();
+        break;
+      case 'unlink':
+        state.links = state.links.filter(l => l.from !== p.id);
+        commit();
+        break;
+      case 'rename': closePtrMenu(); startEdit(p.id); break;
+      case 'delete': closePtrMenu(); deleteSelection(); break;
+    }
+  });
 
   function toggleLinkStyle() {
     selLinks.forEach(id => { const l = linkById(id); if (l) l.style = l.style === 'next' ? 'prev' : 'next'; });
@@ -658,7 +852,9 @@
   }
 
   // ---------- rendering ----------
-  const port = (x, y, id) => `<circle class="port" data-port="${id}" cx="${x}" cy="${y}" r="7"/>`;
+  // visible dot plus a larger invisible hit circle so the handle is easy to grab
+  const port = (x, y, id) => `<circle class="port-hit" data-port="${id}" cx="${x}" cy="${y}" r="14"/>` +
+    `<circle class="port" cx="${x}" cy="${y}" r="7"/>`;
 
   function drawNode(n) {
     const cls = ['obj', n.type, 'c-' + (n.color || 'default')];
@@ -701,7 +897,8 @@
       }
       case 'pointer':
       case 'null':
-        h = `<rect class="body" x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${n.type === 'pointer' ? 13 : 4}"/>` +
+        h = (n.type === 'pointer' ? `<rect class="hitpad" x="${s.x - 8}" y="${s.y - 8}" width="${s.w + 16}" height="${s.h + 16}" rx="20"/>` : '') +
+            `<rect class="body" x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${n.type === 'pointer' ? 16 : 4}"/>` +
             `<text class="val" x="${s.cx}" y="${s.cy}">${esc(n.value)}</text>` +
             (n.type === 'pointer' ? port(s.x + s.w, s.cy, n.id) : '');
         break;
@@ -743,6 +940,7 @@
     $('#redo').disabled = hIdx >= hist.length - 1;
     updateSelBar();
     updateHint();
+    renderPtrMenu();
   }
 
   function updateSelBar() {
@@ -772,7 +970,8 @@
   }
 
   function updateHint() {
-    if (pending) hint.textContent = 'Now click the target node · Esc to cancel';
+    if (pending && pending.pick) hint.textContent = `Click the node or array cell "${byId(pending.from)?.value ?? ''}" should point to · Esc to cancel`;
+    else if (pending) hint.textContent = 'Now click the target node · Esc to cancel';
     else if (tool === 'connect') hint.textContent = 'Link mode: drag node → node, or click source then target · drop on empty space to create a linked node';
     else hint.textContent = 'Double-click to add/edit · drag the ● handle to link · Shift+drag to box-select · wheel to zoom · ? for help';
   }
@@ -873,6 +1072,7 @@
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.preventDefault();
     if (editing) finishEdit(true);
+    closePtrMenu();
     const p = toWorld(e);
     const t = e.target;
     const portEl = t.closest('[data-port]');
@@ -890,11 +1090,13 @@
     }
 
     // start a link
-    if (portEl || (objEl && tool === 'connect')) {
+    if (portEl || (objEl && (tool === 'connect' || pending))) {
       const id = +(portEl ? portEl.dataset.port : objEl.dataset.id);
       const cell = !portEl && cellEl ? +cellEl.dataset.cell : null;
       if (pending && !portEl) {
-        addLink(pending.from, pending.fromCell, id, cell);
+        const src = byId(pending.from);
+        if (pending.pick && src && id !== src.id) pointTo(src, { id, cell });
+        else addLink(pending.from, pending.fromCell, id, cell);
         pending = null;
         commit();
         return;
@@ -982,6 +1184,12 @@
           if (snap) { nx = Math.round(nx / GRID) * GRID; ny = Math.round(ny / GRID) * GRID; }
           s.n.x = nx; s.n.y = ny;
         }
+        // dragging a single pointer: highlight the node it will snap onto
+        if (drag.starts.length === 1 && drag.starts[0].n.type === 'pointer') {
+          const t = targetAt(p, drag.starts[0].n.id);
+          drag.hover = t ? t.id : null;
+          drag.target = t;
+        }
         render();
         break;
       }
@@ -1024,10 +1232,18 @@
     overlay.innerHTML = '';
     svg.classList.remove('panning');
     switch (d.mode) {
-      case 'move':
-        if (d.moved) commit();
-        else if (!d.shift && sel.size > 1) { sel = new Set([d.clicked]); render(); }
+      case 'move': {
+        const clicked = byId(d.clicked);
+        if (d.moved) {
+          if (d.target && clicked && clicked.type === 'pointer') pointTo(clicked, d.target);
+          commit();
+        } else {
+          if (!d.shift && sel.size > 1) sel = new Set([d.clicked]);
+          if (!d.shift && clicked && clicked.type === 'pointer') openPtrMenu(clicked.id);
+          render();
+        }
         break;
+      }
       case 'pan': persist(); break;
       case 'resize': if (d.moved) commit(); break;
       case 'box': {
@@ -1338,6 +1554,13 @@
     if (e.altKey) return;
 
     const arrows = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
+    if ((k === 'arrowright' || k === 'arrowleft' || k === '.' || k === ',') && !e.shiftKey &&
+        sel.size && [...sel].every(id => byId(id)?.type === 'pointer')) {
+      // pointers: step along next / prev instead of nudging
+      e.preventDefault();
+      stepPointers(k === 'arrowright' || k === '.' ? 1 : -1);
+      return;
+    }
     if (arrows[k] && sel.size) {
       e.preventDefault();
       const step = e.shiftKey ? 20 : 2;
@@ -1349,7 +1572,7 @@
     switch (k) {
       case 'delete': case 'backspace': e.preventDefault(); deleteSelection(); break;
       case 'escape':
-        pending = null; sel.clear(); selLinks.clear(); selCell = null; render(); break;
+        closePtrMenu(); pending = null; sel.clear(); selLinks.clear(); selCell = null; render(); break;
       case 'enter': case 'f2':
         if (sel.size === 1) { e.preventDefault(); const id = [...sel][0]; startEdit(id, selCell && selCell.id === id ? selCell.idx : null); }
         break;
@@ -1389,6 +1612,17 @@
     addLinkRaw(nodes[3].id, null, nul.id, null, 'next');
     makeNode('text', -10, 110, { value: 'Double-click empty space to add a node\nDrag the ● handle on a node to link it' });
   }
+
+  // sidebar collapse (icons only); remembered per browser, collapsed by default on small screens
+  const COLLAPSE_KEY = 'jsolver.sidebar.collapsed';
+  function setCollapsed(c) {
+    document.body.classList.toggle('collapsed', c);
+    try { localStorage.setItem(COLLAPSE_KEY, c ? '1' : '0'); } catch (_) { /* ignore */ }
+  }
+  $('#collapseBtn').addEventListener('click', () => setCollapsed(!document.body.classList.contains('collapsed')));
+  let savedCollapse = null;
+  try { savedCollapse = localStorage.getItem(COLLAPSE_KEY); } catch (_) { /* ignore */ }
+  document.body.classList.toggle('collapsed', savedCollapse ? savedCollapse === '1' : window.innerWidth < 720);
 
   if (window.innerWidth < 720) togglePanel(false);
   if (!loadSaved()) seed();
