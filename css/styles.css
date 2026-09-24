@@ -170,6 +170,10 @@ body.collapsed .tg button { justify-content: center; padding: 3px 0; }
 #ptrMenu .btn:disabled { opacity: .4; cursor: default; background: transparent; }
 #ptrMenu code { font: 600 13px ui-monospace, Menlo, Consolas, monospace; }
 #ptrMenu .k { color: var(--muted); font-size: 12px; }
+#ptrMenu .nudge { display: flex; align-items: center; gap: 2px; }
+#ptrMenu .nudge .btn { justify-content: center; min-width: 32px; }
+#ptrMenu .nudge .k { margin-left: auto; padding: 0 6px 0 10px; }
+#ptrMenu .swatches { display: flex; gap: 6px; padding: 6px 6px 4px; }
 #ptrMenu hr { border: 0; border-top: 1px solid var(--border); margin: 3px 2px; }
 
 .link { cursor: pointer; }

@@ -229,17 +229,7 @@ function closePtrMenu() { menuFor = null; ptrMenu.hidden = true; }
 function renderPtrMenu() {
   const p = menuFor != null ? byId(menuFor) : null;
   if (!p || !sel.has(p.id) || drag || editing) { ptrMenu.hidden = true; if (!p || !sel.has(menuFor)) menuFor = null; return; }
-  const name = esc(p.value);
-  const cur = pointerLink(p);
-  menuMoves = pointerMoves(p);
-  const moves = menuMoves.length
-    ? menuMoves.map((m, i) => `<button class="btn" data-pm="move" data-i="${i}"><code>${esc(m.code)}</code><span class="k">${m.key}</span></button>`).join('')
-    : `<button class="btn" disabled><span>${cur ? 'Nowhere to move from here' : 'Not pointing at anything'}</span></button>`;
-  const h = moves +
-    `<button class="btn" data-pm="pick"><span>Point to…</span><span class="k">click a node</span></button>` +
-    (cur ? `<button class="btn" data-pm="unlink"><code>${name} = null</code><span class="k"></span></button>` : '') +
-    `<hr><button class="btn" data-pm="rename"><span>Rename</span><span class="k">Enter</span></button>` +
-    `<button class="btn" data-pm="delete"><span>Delete</span><span class="k">Del</span></button>`;
+  const h = p.type === 'pointer' ? pointerMenuHtml(p) : nodeMenuHtml(p);
   if (ptrMenu.innerHTML !== h) ptrMenu.innerHTML = h;
   ptrMenu.hidden = false;
   const s = shape(p);
@@ -251,6 +241,32 @@ function renderPtrMenu() {
   if (top + mh > sr.height - 8) top = toScreen(s.cx, s.y).y - mh - 12;
   ptrMenu.style.left = left + 'px';
   ptrMenu.style.top = Math.max(8, top) + 'px';
+}
+
+function pointerMenuHtml(p) {
+  const name = esc(p.value);
+  const cur = pointerLink(p);
+  menuMoves = pointerMoves(p);
+  const moves = menuMoves.length
+    ? menuMoves.map((m, i) => `<button class="btn" data-pm="move" data-i="${i}"><code>${esc(m.code)}</code><span class="k">${m.key}</span></button>`).join('')
+    : `<button class="btn" disabled><span>${cur ? 'Nowhere to move from here' : 'Not pointing at anything'}</span></button>`;
+  return moves +
+    `<button class="btn" data-pm="pick"><span>Point to…</span><span class="k">click a node</span></button>` +
+    (cur ? `<button class="btn" data-pm="unlink"><code>${name} = null</code><span class="k"></span></button>` : '') +
+    `<hr><button class="btn" data-pm="rename"><span>Rename</span><span class="k">Enter</span></button>` +
+    `<button class="btn" data-pm="delete"><span>Delete</span><span class="k">Del</span></button>`;
+}
+
+// any other node: nudge arrows, colour, edit, duplicate, delete
+function nodeMenuHtml(n) {
+  const arrow = (dx, dy, ch, t) => `<button class="btn" data-pm="nudge" data-dx="${dx}" data-dy="${dy}" title="Move ${t} (arrow key, Shift = fine)">${ch}</button>`;
+  const cellSel = n.type === 'array' && selCell && selCell.id === n.id;
+  return `<div class="nudge">${arrow(-1, 0, '←', 'left')}${arrow(0, -1, '↑', 'up')}${arrow(0, 1, '↓', 'down')}${arrow(1, 0, '→', 'right')}` +
+    `<span class="k">or drag it</span></div>` +
+    `<div class="swatches">${COLORS.map((c, i) => `<button class="sw c-${c}" data-pm="color" data-color="${c}" title="${c} (${i + 1})"></button>`).join('')}</div>` +
+    `<hr><button class="btn" data-pm="rename"><span>${cellSel ? 'Edit cell' : 'Edit'}</span><span class="k">Enter</span></button>` +
+    `<button class="btn" data-pm="dup"><span>Duplicate</span><span class="k">Ctrl+D</span></button>` +
+    `<button class="btn" data-pm="delete"><span>Delete</span><span class="k">Del</span></button>`;
 }
 
 ptrMenu.addEventListener('pointerdown', e => e.stopPropagation());
@@ -274,7 +290,15 @@ ptrMenu.addEventListener('click', e => {
       state.links = state.links.filter(l => l.from !== p.id);
       commit();
       break;
-    case 'rename': closePtrMenu(); startEdit(p.id); break;
+    case 'nudge': {
+      const step = e.shiftKey ? 2 : 20;
+      p.x += +b.dataset.dx * step; p.y += +b.dataset.dy * step;
+      commit();
+      break;
+    }
+    case 'color': applyColor(b.dataset.color); break;
+    case 'dup': closePtrMenu(); duplicateSelection(); break;
+    case 'rename': closePtrMenu(); startEdit(p.id, selCell && selCell.id === p.id ? selCell.idx : null); break;
     case 'delete': closePtrMenu(); deleteSelection(); break;
   }
 });

@@ -30,6 +30,9 @@ svg.addEventListener('pointerdown', e => {
   if (e.button !== 0 && e.pointerType === 'mouse') return;
   e.preventDefault();
   if (editing) finishEdit(true);
+  // preventDefault keeps focus where it was; release panel inputs so Delete etc. reach the board
+  const fe = document.activeElement;
+  if (fe && fe !== document.body && fe.blur) fe.blur();
   closePtrMenu();
   const p = toWorld(e);
   const t = e.target;
@@ -233,7 +236,7 @@ function endDrag(e) {
         commit();
       } else {
         if (!d.shift && sel.size > 1) sel = new Set([d.clicked]);
-        if (!d.shift && clicked && clicked.type === 'pointer') openPtrMenu(clicked.id);
+        if (!d.shift && clicked) openPtrMenu(clicked.id);
         render();
       }
       break;
