@@ -222,7 +222,14 @@ function endDrag(e) {
     case 'move': {
       const clicked = byId(d.clicked);
       if (d.moved) {
-        if (d.target && clicked && clicked.type === 'pointer') pointTo(clicked, d.target);
+        if (d.starts.length === 1 && clicked && clicked.type === 'pointer') {
+          if (d.target) pointTo(clicked, d.target);
+          else if (pointerLink(clicked)) {
+            // dropped on empty canvas: the pointer is detached (= null)
+            state.links = state.links.filter(l => l.from !== clicked.id);
+            toast(`${clicked.value} = null`);
+          }
+        }
         commit();
       } else {
         if (!d.shift && sel.size > 1) sel = new Set([d.clicked]);
