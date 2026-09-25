@@ -265,6 +265,11 @@ function nodeMenuHtml(n) {
     `<span class="k">or drag it</span></div>` +
     `<div class="swatches">${COLORS.map((c, i) => `<button class="sw c-${c}" data-pm="color" data-color="${c}" title="${c} (${i + 1})"></button>`).join('')}</div>` +
     `<hr><button class="btn" data-pm="rename"><span>${cellSel ? 'Edit cell' : 'Edit'}</span><span class="k">Enter</span></button>` +
+    (n.type === 'array'
+      ? `<button class="btn" data-pm="addcell"><span>+ cell</span><span class="k">]</span></button>` +
+        `<button class="btn" data-pm="rmcell"><span>− cell</span><span class="k">[</span></button>` +
+        `<button class="btn" data-pm="values"><span>Values…</span><span class="k"></span></button>`
+      : '') +
     `<button class="btn" data-pm="dup"><span>Duplicate</span><span class="k">Ctrl+D</span></button>` +
     `<button class="btn" data-pm="delete"><span>Delete</span><span class="k">Del</span></button>`;
 }
@@ -297,6 +302,9 @@ ptrMenu.addEventListener('click', e => {
       break;
     }
     case 'color': applyColor(b.dataset.color); break;
+    case 'addcell': arrayAddCell(); break;
+    case 'rmcell': arrayRemoveCell(); break;
+    case 'values': closePtrMenu(); arraySetValues(); break;
     case 'dup': closePtrMenu(); duplicateSelection(); break;
     case 'rename': closePtrMenu(); startEdit(p.id, selCell && selCell.id === p.id ? selCell.idx : null); break;
     case 'delete': closePtrMenu(); deleteSelection(); break;

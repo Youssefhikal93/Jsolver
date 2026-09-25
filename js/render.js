@@ -113,16 +113,18 @@ function render() {
 
   $('#undo').disabled = hIdx <= 0;
   $('#redo').disabled = hIdx >= hist.length - 1;
+  renderPtrMenu();
   updateSelBar();
   updateHint();
-  renderPtrMenu();
 }
 
 function updateSelBar() {
   const nodes = [...sel].map(byId).filter(Boolean);
   const links = [...selLinks].map(linkById).filter(Boolean);
   let h = '';
-  if (nodes.length || links.length) {
+  // the click menu already has these actions; don't show them twice
+  const menuOpen = !ptrMenu.hidden && nodes.length === 1 && !links.length;
+  if (!menuOpen && (nodes.length || links.length)) {
     if (nodes.length) {
       h += COLORS.map((c, i) => `<button class="sw c-${c}" data-color="${c}" title="${c} (${i + 1})"></button>`).join('');
       h += '<span class="sep"></span>';
